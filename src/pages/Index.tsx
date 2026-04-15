@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Radio, Zap, Activity, Settings, ChevronRight, Layers, Database, Info, User, Mail, TrendingUp } from "lucide-react";
 import SmithChart from "@/components/SmithChart";
 import CircuitSchematic from "@/components/CircuitSchematic";
+import { computeMatch } from "@/lib/matchingEngine";
 
 interface ComponentData {
   theory: number;
@@ -68,8 +69,14 @@ const Index = () => {
       const data = await response.json();
       setResult(data);
       setViewMode("schematic");
-    } catch (error) {
-      console.error(error);
+    } catch {
+      // Backend unavailable — use client-side matching engine
+      console.log("Backend unavailable, using client-side matching engine");
+      const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
+      if (results.length > 0) {
+        setResult(results[0]);
+        setViewMode("schematic");
+      }
     } finally {
       setIsCalculating(false);
     }
