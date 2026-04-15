@@ -217,44 +217,41 @@ export function computeMatch(
     // --- T Network ---
     try {
       const Q_t = 3;
-      if (RL > Z0) {
-        const R_virt = Math.max(RL, Z0) * (1 + Q_t * Q_t);
+      const R_virt = Math.max(RL, Z0) * (1 + Q_t * Q_t);
+      const Q1 = Math.sqrt(R_virt / RL - 1);
+      const Q2 = Math.sqrt(R_virt / Z0 - 1);
 
-        const Q1 = Math.sqrt(R_virt / RL - 1);
-        const Q2 = Math.sqrt(R_virt / Z0 - 1);
+      if (!isHP) {
+        const L1 = (Q1 * RL - XL) / omega;
+        const C = 1 / (omega * R_virt * (Q1 + Q2));
+        const L2 = Q2 * Z0 / omega;
 
-        if (!isHP) {
-          const L1 = (Q1 * RL - XL) / omega;
-          const C = 1 / (omega * R_virt * (Q1 + Q2));
-          const L2 = Q2 * Z0 / omega;
+        if (L1 > 0 && C > 0 && L2 > 0) {
+          results.push({
+            network: "T Network",
+            components: {
+              L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
+              C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
+              L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
+            },
+            reason: `T network: Q=${Q_t}. Two series inductors with shunt capacitor — ideal for low-impedance loads.`,
+          });
+        }
+      } else {
+        const C1 = 1 / (omega * Q1 * RL);
+        const L = R_virt / (omega * (Q1 + Q2));
+        const C2 = 1 / (omega * Q2 * Z0);
 
-          if (L1 > 0 && C > 0 && L2 > 0) {
-            results.push({
-              network: "T Network",
-              components: {
-                L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
-                C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
-                L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
-              },
-              reason: `T network: Q=${Q_t}. Two series inductors with shunt capacitor for broadband matching.`,
-            });
-          }
-        } else {
-          const C1 = 1 / (omega * Q1 * RL);
-          const L = R_virt / (omega * (Q1 + Q2));
-          const C2 = 1 / (omega * Q2 * Z0);
-
-          if (C1 > 0 && L > 0 && C2 > 0) {
-            results.push({
-              network: "T Network",
-              components: {
-                C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
-                L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
-                C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
-              },
-              reason: `High-pass T network with series capacitors and shunt inductor.`,
-            });
-          }
+        if (C1 > 0 && L > 0 && C2 > 0) {
+          results.push({
+            network: "T Network",
+            components: {
+              C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
+              L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
+              C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
+            },
+            reason: `High-pass T network with series capacitors and shunt inductor.`,
+          });
         }
       }
     } catch {
