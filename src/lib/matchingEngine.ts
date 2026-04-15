@@ -171,45 +171,42 @@ export function computeMatch(
     // --- Pi Network ---
     try {
       const Q_pi = 3; // Design Q for Pi network
-      if (RL > Z0) {
-        const R_virt = Math.min(RL, Z0) / (1 + Q_pi * Q_pi);
-        // This isn't physical for all cases, skip if R_virt <= 0
-        if (R_virt > 0) {
-          const Q1 = Math.sqrt(RL / R_virt - 1);
-          const Q2 = Math.sqrt(Z0 / R_virt - 1);
+      const R_virt = Math.min(RL, Z0) / (1 + Q_pi * Q_pi);
+      if (R_virt > 0) {
+        const Q1 = Math.sqrt(RL / R_virt - 1);
+        const Q2 = Math.sqrt(Z0 / R_virt - 1);
 
-          if (!isHP) {
-            const C1 = Q1 / (omega * RL);
-            const L = R_virt * (Q1 + Q2) / omega;
-            const C2 = Q2 / (omega * Z0);
+        if (!isHP) {
+          const C1 = Q1 / (omega * RL);
+          const L = R_virt * (Q1 + Q2) / omega;
+          const C2 = Q2 / (omega * Z0);
 
-            if (C1 > 0 && L > 0 && C2 > 0) {
-              results.push({
-                network: "Pi Network",
-                components: {
-                  C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
-                  L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
-                  C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
-                },
-                reason: `Pi network: Q=${Q_pi}. Provides harmonic filtering with two shunt capacitors and series inductor.`,
-              });
-            }
-          } else {
-            const L1 = RL / (omega * Q1);
-            const C = 1 / (omega * R_virt * (Q1 + Q2));
-            const L2 = Z0 / (omega * Q2);
+          if (C1 > 0 && L > 0 && C2 > 0) {
+            results.push({
+              network: "Pi Network",
+              components: {
+                C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
+                L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
+                C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
+              },
+              reason: `Pi network: Q=${Q_pi}. Two shunt capacitors with series inductor — ideal for high-impedance loads.`,
+            });
+          }
+        } else {
+          const L1 = RL / (omega * Q1);
+          const C = 1 / (omega * R_virt * (Q1 + Q2));
+          const L2 = Z0 / (omega * Q2);
 
-            if (L1 > 0 && C > 0 && L2 > 0) {
-              results.push({
-                network: "Pi Network",
-                components: {
-                  L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
-                  C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
-                  L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
-                },
-                reason: `High-pass Pi network with shunt inductors and series capacitor.`,
-              });
-            }
+          if (L1 > 0 && C > 0 && L2 > 0) {
+            results.push({
+              network: "Pi Network",
+              components: {
+                L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
+                C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
+                L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
+              },
+              reason: `High-pass Pi network with shunt inductors and series capacitor.`,
+            });
           }
         }
       }
