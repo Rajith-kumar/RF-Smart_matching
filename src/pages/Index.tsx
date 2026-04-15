@@ -72,16 +72,22 @@ const Index = () => {
       setResult(data);
       setViewMode("schematic");
     } catch {
-      // Backend unavailable — use client-side matching engine
       console.log("Backend unavailable, using client-side matching engine");
       const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
       if (results.length > 0) {
+        setAllResults(results);
+        setSelectedIdx(0);
         setResult(results[0]);
         setViewMode("schematic");
       }
     } finally {
       setIsCalculating(false);
     }
+  };
+
+  const handleSelectNetwork = (idx: number) => {
+    setSelectedIdx(idx);
+    setResult(allResults[idx]);
   };
 
   const renderHome = () => (
