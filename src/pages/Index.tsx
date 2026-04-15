@@ -69,8 +69,14 @@ const Index = () => {
       const data = await response.json();
       setResult(data);
       setViewMode("schematic");
-    } catch (error) {
-      console.error(error);
+    } catch {
+      // Backend unavailable — use client-side matching engine
+      console.log("Backend unavailable, using client-side matching engine");
+      const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
+      if (results.length > 0) {
+        setResult(results[0]);
+        setViewMode("schematic");
+      }
     } finally {
       setIsCalculating(false);
     }
