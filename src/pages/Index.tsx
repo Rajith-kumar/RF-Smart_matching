@@ -31,6 +31,8 @@ const Index = () => {
   const [Z0, setZ0] = useState(50);
   const [mode, setMode] = useState("low_pass");
   const [result, setResult] = useState<MatchResult | null>(null);
+  const [allResults, setAllResults] = useState<MatchResult[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const [isCalculating, setIsCalculating] = useState(false);
   const [freq, setFreq] = useState("100");
   const [freqUnit, setFreqUnit] = useState("MHz");
