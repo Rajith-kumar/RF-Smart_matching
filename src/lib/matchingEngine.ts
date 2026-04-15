@@ -265,5 +265,39 @@ export function computeMatch(
     }
   }
 
+  // Sort results: prioritize based on impedance ratio
+  // High ZL (ratio > 2) → Pi network best (shunt-first topology steps down)
+  // Low ZL (ratio < 0.5) → T network best (series-first topology steps up)
+  // Moderate ZL → L-section is simplest and sufficient
+  const priority = (name: string): number => {
+    if (ratio > 2) {
+      // High impedance: Pi > L > T
+      if (name.includes("Pi")) return 0;
+      if (name.includes("L Section")) return 1;
+      if (name.includes("T Network")) return 2;
+    } else if (ratio < 0.5) {
+      // Low impedance: T > L > Pi
+      if (name.includes("T Network")) return 0;
+      if (name.includes("L Section")) return 1;
+      if (name.includes("Pi")) return 2;
+    } else {
+      // Moderate: L > Pi > T
+      if (name.includes("L Section")) return 0;
+      if (name.includes("Pi")) return 1;
+      if (name.includes("T Network")) return 2;
+    }
+    return 3;
+  };
+
+  results.sort((a, b) => priority(a.network) - priority(b.network));
+
+  // Update reason with recommendation context
+  if (results.length > 0) {
+    const rec = ratio > 2 ? "Pi network recommended for high-impedance loads" :
+                ratio < 0.5 ? "T network recommended for low-impedance loads" :
+                "L-section recommended for moderate impedance ratio";
+    results[0].reason = `${rec}. ${results[0].reason}`;
+  }
+
   return results;
 }
