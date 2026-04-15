@@ -62,6 +62,7 @@ export function computeMatch(
   const omega = 2 * Math.PI * freqHz;
   const results: MatchResult[] = [];
   const isHP = mode === "high_pass";
+  const ratio = RL / Z0; // impedance ratio for network selection
 
   // --- L-Section Matching ---
   // Case: RL > Z0 (shunt element first, then series)
