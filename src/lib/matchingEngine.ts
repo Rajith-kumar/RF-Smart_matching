@@ -62,6 +62,7 @@ export function computeMatch(
   const omega = 2 * Math.PI * freqHz;
   const results: MatchResult[] = [];
   const isHP = mode === "high_pass";
+  const ratio = RL / Z0; // impedance ratio for network selection
 
   // --- L-Section Matching ---
   // Case: RL > Z0 (shunt element first, then series)
@@ -170,45 +171,42 @@ export function computeMatch(
     // --- Pi Network ---
     try {
       const Q_pi = 3; // Design Q for Pi network
-      if (RL > Z0) {
-        const R_virt = Math.min(RL, Z0) / (1 + Q_pi * Q_pi);
-        // This isn't physical for all cases, skip if R_virt <= 0
-        if (R_virt > 0) {
-          const Q1 = Math.sqrt(RL / R_virt - 1);
-          const Q2 = Math.sqrt(Z0 / R_virt - 1);
+      const R_virt = Math.min(RL, Z0) / (1 + Q_pi * Q_pi);
+      if (R_virt > 0) {
+        const Q1 = Math.sqrt(RL / R_virt - 1);
+        const Q2 = Math.sqrt(Z0 / R_virt - 1);
 
-          if (!isHP) {
-            const C1 = Q1 / (omega * RL);
-            const L = R_virt * (Q1 + Q2) / omega;
-            const C2 = Q2 / (omega * Z0);
+        if (!isHP) {
+          const C1 = Q1 / (omega * RL);
+          const L = R_virt * (Q1 + Q2) / omega;
+          const C2 = Q2 / (omega * Z0);
 
-            if (C1 > 0 && L > 0 && C2 > 0) {
-              results.push({
-                network: "Pi Network",
-                components: {
-                  C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
-                  L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
-                  C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
-                },
-                reason: `Pi network: Q=${Q_pi}. Provides harmonic filtering with two shunt capacitors and series inductor.`,
-              });
-            }
-          } else {
-            const L1 = RL / (omega * Q1);
-            const C = 1 / (omega * R_virt * (Q1 + Q2));
-            const L2 = Z0 / (omega * Q2);
+          if (C1 > 0 && L > 0 && C2 > 0) {
+            results.push({
+              network: "Pi Network",
+              components: {
+                C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
+                L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
+                C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
+              },
+              reason: `Pi network: Q=${Q_pi}. Two shunt capacitors with series inductor — ideal for high-impedance loads.`,
+            });
+          }
+        } else {
+          const L1 = RL / (omega * Q1);
+          const C = 1 / (omega * R_virt * (Q1 + Q2));
+          const L2 = Z0 / (omega * Q2);
 
-            if (L1 > 0 && C > 0 && L2 > 0) {
-              results.push({
-                network: "Pi Network",
-                components: {
-                  L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
-                  C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
-                  L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
-                },
-                reason: `High-pass Pi network with shunt inductors and series capacitor.`,
-              });
-            }
+          if (L1 > 0 && C > 0 && L2 > 0) {
+            results.push({
+              network: "Pi Network",
+              components: {
+                L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
+                C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
+                L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
+              },
+              reason: `High-pass Pi network with shunt inductors and series capacitor.`,
+            });
           }
         }
       }
@@ -219,49 +217,80 @@ export function computeMatch(
     // --- T Network ---
     try {
       const Q_t = 3;
-      if (RL > Z0) {
-        const R_virt = Math.max(RL, Z0) * (1 + Q_t * Q_t);
+      const R_virt = Math.max(RL, Z0) * (1 + Q_t * Q_t);
+      const Q1 = Math.sqrt(R_virt / RL - 1);
+      const Q2 = Math.sqrt(R_virt / Z0 - 1);
 
-        const Q1 = Math.sqrt(R_virt / RL - 1);
-        const Q2 = Math.sqrt(R_virt / Z0 - 1);
+      if (!isHP) {
+        const L1 = (Q1 * RL - XL) / omega;
+        const C = 1 / (omega * R_virt * (Q1 + Q2));
+        const L2 = Q2 * Z0 / omega;
 
-        if (!isHP) {
-          const L1 = (Q1 * RL - XL) / omega;
-          const C = 1 / (omega * R_virt * (Q1 + Q2));
-          const L2 = Q2 * Z0 / omega;
+        if (L1 > 0 && C > 0 && L2 > 0) {
+          results.push({
+            network: "T Network",
+            components: {
+              L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
+              C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
+              L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
+            },
+            reason: `T network: Q=${Q_t}. Two series inductors with shunt capacitor — ideal for low-impedance loads.`,
+          });
+        }
+      } else {
+        const C1 = 1 / (omega * Q1 * RL);
+        const L = R_virt / (omega * (Q1 + Q2));
+        const C2 = 1 / (omega * Q2 * Z0);
 
-          if (L1 > 0 && C > 0 && L2 > 0) {
-            results.push({
-              network: "T Network",
-              components: {
-                L1: { theory: L1, standard: toStandard(L1, "H"), unit: "H" },
-                C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
-                L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
-              },
-              reason: `T network: Q=${Q_t}. Two series inductors with shunt capacitor for broadband matching.`,
-            });
-          }
-        } else {
-          const C1 = 1 / (omega * Q1 * RL);
-          const L = R_virt / (omega * (Q1 + Q2));
-          const C2 = 1 / (omega * Q2 * Z0);
-
-          if (C1 > 0 && L > 0 && C2 > 0) {
-            results.push({
-              network: "T Network",
-              components: {
-                C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
-                L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
-                C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
-              },
-              reason: `High-pass T network with series capacitors and shunt inductor.`,
-            });
-          }
+        if (C1 > 0 && L > 0 && C2 > 0) {
+          results.push({
+            network: "T Network",
+            components: {
+              C1: { theory: C1, standard: toStandard(C1, "F"), unit: "F" },
+              L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
+              C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
+            },
+            reason: `High-pass T network with series capacitors and shunt inductor.`,
+          });
         }
       }
     } catch {
       // Skip
     }
+  }
+
+  // Sort results: prioritize based on impedance ratio
+  // High ZL (ratio > 2) → Pi network best (shunt-first topology steps down)
+  // Low ZL (ratio < 0.5) → T network best (series-first topology steps up)
+  // Moderate ZL → L-section is simplest and sufficient
+  const priority = (name: string): number => {
+    if (ratio > 2) {
+      // High impedance: Pi > L > T
+      if (name.includes("Pi")) return 0;
+      if (name.includes("L Section")) return 1;
+      if (name.includes("T Network")) return 2;
+    } else if (ratio < 0.5) {
+      // Low impedance: T > L > Pi
+      if (name.includes("T Network")) return 0;
+      if (name.includes("L Section")) return 1;
+      if (name.includes("Pi")) return 2;
+    } else {
+      // Moderate: L > Pi > T
+      if (name.includes("L Section")) return 0;
+      if (name.includes("Pi")) return 1;
+      if (name.includes("T Network")) return 2;
+    }
+    return 3;
+  };
+
+  results.sort((a, b) => priority(a.network) - priority(b.network));
+
+  // Update reason with recommendation context
+  if (results.length > 0) {
+    const rec = ratio > 2 ? "Pi network recommended for high-impedance loads" :
+                ratio < 0.5 ? "T network recommended for low-impedance loads" :
+                "L-section recommended for moderate impedance ratio";
+    results[0].reason = `${rec}. ${results[0].reason}`;
   }
 
   return results;

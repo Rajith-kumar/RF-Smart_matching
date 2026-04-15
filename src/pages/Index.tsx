@@ -31,6 +31,8 @@ const Index = () => {
   const [Z0, setZ0] = useState(50);
   const [mode, setMode] = useState("low_pass");
   const [result, setResult] = useState<MatchResult | null>(null);
+  const [allResults, setAllResults] = useState<MatchResult[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const [isCalculating, setIsCalculating] = useState(false);
   const [freq, setFreq] = useState("100");
   const [freqUnit, setFreqUnit] = useState("MHz");
@@ -70,16 +72,22 @@ const Index = () => {
       setResult(data);
       setViewMode("schematic");
     } catch {
-      // Backend unavailable — use client-side matching engine
       console.log("Backend unavailable, using client-side matching engine");
       const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
       if (results.length > 0) {
+        setAllResults(results);
+        setSelectedIdx(0);
         setResult(results[0]);
         setViewMode("schematic");
       }
     } finally {
       setIsCalculating(false);
     }
+  };
+
+  const handleSelectNetwork = (idx: number) => {
+    setSelectedIdx(idx);
+    setResult(allResults[idx]);
   };
 
   const renderHome = () => (
@@ -178,12 +186,32 @@ const Index = () => {
           </div>
         ) : (
           <>
+            {/* Network selection tabs */}
+            {allResults.length > 1 && (
+              <div className="flex gap-2 mb-4">
+                {allResults.map((r, i) => (
+                  <button
+                    key={r.network}
+                    onClick={() => handleSelectNetwork(i)}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                      i === selectedIdx
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {r.network}
+                    {i === 0 && <span className="ml-1.5 text-[9px] opacity-75">★ Recommended</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="bg-card rounded-2xl p-6 border border-border mb-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-[10px] font-extrabold text-primary bg-primary/10 px-2.5 py-1 rounded-md">
-                      Optimal Match Found
+                      {selectedIdx === 0 ? "Recommended" : "Alternative"}
                     </span>
                     <span className="text-[10px] font-extrabold text-success bg-success/10 px-2.5 py-1 rounded-md">
                       {mode === "low_pass" ? "Low Pass" : "High Pass"}
