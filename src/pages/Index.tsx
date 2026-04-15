@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Radio, Zap, Activity, Settings, ChevronRight, Layers, Database, Info, User, Mail, TrendingUp } from "lucide-react";
 import SmithChart from "@/components/SmithChart";
 import CircuitSchematic from "@/components/CircuitSchematic";
+import { computeMatch } from "@/lib/matchingEngine";
 
 interface ComponentData {
   theory: number;
