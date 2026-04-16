@@ -259,23 +259,27 @@ export function computeMatch(
     }
   }
 
+  // Validate: simulate each network and keep only those that reach Z0
+  const validated = results.filter((r) => {
+    const endZ = simulatePath(r, ZL_real, ZL_imag, Z0, omega);
+    if (!endZ) return false;
+    // Check if final impedance is close to Z0 (normalized ~1+j0)
+    const normR = endZ.r / Z0;
+    const normX = endZ.x / Z0;
+    return Math.abs(normR - 1) < 0.15 && Math.abs(normX) < 0.15;
+  });
+
   // Sort results: prioritize based on impedance ratio
-  // High ZL (ratio > 2) → Pi network best (shunt-first topology steps down)
-  // Low ZL (ratio < 0.5) → T network best (series-first topology steps up)
-  // Moderate ZL → L-section is simplest and sufficient
   const priority = (name: string): number => {
     if (ratio > 2) {
-      // High impedance: Pi > L > T
       if (name.includes("Pi")) return 0;
       if (name.includes("L Section")) return 1;
       if (name.includes("T Network")) return 2;
     } else if (ratio < 0.5) {
-      // Low impedance: T > L > Pi
       if (name.includes("T Network")) return 0;
       if (name.includes("L Section")) return 1;
       if (name.includes("Pi")) return 2;
     } else {
-      // Moderate: L > Pi > T
       if (name.includes("L Section")) return 0;
       if (name.includes("Pi")) return 1;
       if (name.includes("T Network")) return 2;
@@ -283,15 +287,110 @@ export function computeMatch(
     return 3;
   };
 
-  results.sort((a, b) => priority(a.network) - priority(b.network));
+  validated.sort((a, b) => priority(a.network) - priority(b.network));
 
-  // Update reason with recommendation context
-  if (results.length > 0) {
+  if (validated.length > 0) {
     const rec = ratio > 2 ? "Pi network recommended for high-impedance loads" :
                 ratio < 0.5 ? "T network recommended for low-impedance loads" :
                 "L-section recommended for moderate impedance ratio";
-    results[0].reason = `${rec}. ${results[0].reason}`;
+    validated[0].reason = `${rec}. ${validated[0].reason}`;
   }
 
-  return results;
+  return validated;
+}
+
+/** Simulate the matching path and return final impedance */
+function simulatePath(
+  result: MatchResult,
+  ZLReal: number,
+  ZLImag: number,
+  Z0: number,
+  omega: number
+): { r: number; x: number } | null {
+  let currR = ZLReal;
+  let currX = ZLImag;
+  const comps = result.components;
+  const isHP = result.network.includes("High-pass") || 
+    (comps.C_series && comps.L_shunt) || 
+    (comps.L1 && comps.C && comps.L2 && result.reason.includes("High-pass")) ||
+    (comps.C1 && comps.L && comps.C2 && result.reason.includes("High-pass"));
+
+  // Build sequence same as SmithChart
+  let sequence: { val: number; type: string }[] = [];
+
+  if (result.network.includes("L Section")) {
+    if (comps.L_series && comps.C_shunt) {
+      sequence = [
+        { val: comps.L_series.theory, type: "seriesL" },
+        { val: comps.C_shunt.theory, type: "shuntC" },
+      ];
+    } else if (comps.C_series && comps.L_shunt) {
+      sequence = [
+        { val: comps.C_series.theory, type: "seriesC" },
+        { val: comps.L_shunt.theory, type: "shuntL" },
+      ];
+    } else if (comps.C_series) {
+      sequence = [{ val: comps.C_series.theory, type: "seriesC" }];
+    } else if (comps.L_series) {
+      sequence = [{ val: comps.L_series.theory, type: "seriesL" }];
+    }
+  } else if (result.network.includes("Pi")) {
+    if (comps.C1 && comps.L && comps.C2) {
+      sequence = [
+        { val: comps.C1.theory, type: "shuntC" },
+        { val: comps.L.theory, type: "seriesL" },
+        { val: comps.C2.theory, type: "shuntC" },
+      ];
+    } else if (comps.L1 && comps.C && comps.L2) {
+      sequence = [
+        { val: comps.L1.theory, type: "shuntL" },
+        { val: comps.C.theory, type: "seriesC" },
+        { val: comps.L2.theory, type: "shuntL" },
+      ];
+    }
+  } else if (result.network.includes("T")) {
+    if (comps.L1 && comps.C && comps.L2) {
+      sequence = [
+        { val: comps.L1.theory, type: "seriesL" },
+        { val: comps.C.theory, type: "shuntC" },
+        { val: comps.L2.theory, type: "seriesL" },
+      ];
+    } else if (comps.C1 && comps.L && comps.C2) {
+      sequence = [
+        { val: comps.C1.theory, type: "seriesC" },
+        { val: comps.L.theory, type: "shuntL" },
+        { val: comps.C2.theory, type: "seriesC" },
+      ];
+    }
+  }
+
+  for (const { val, type } of sequence) {
+    if (!val || val <= 0) return null;
+
+    if (type === "seriesL") {
+      currX += omega * val;
+    } else if (type === "seriesC") {
+      currX -= 1 / (omega * val);
+    } else {
+      // Shunt: convert to admittance
+      const den = currR * currR + currX * currX;
+      if (den < 1e-12) return null;
+      const G = currR / den;
+      let B = -currX / den;
+
+      if (type === "shuntC") {
+        B += omega * val;
+      } else {
+        B -= 1 / (omega * val);
+      }
+
+      // Convert back to impedance
+      const yDen = G * G + B * B;
+      if (yDen < 1e-12) return null;
+      currR = G / yDen;
+      currX = -B / yDen;
+    }
+  }
+
+  return { r: currR, x: currX };
 }
