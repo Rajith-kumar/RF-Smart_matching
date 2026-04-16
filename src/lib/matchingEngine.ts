@@ -259,15 +259,7 @@ export function computeMatch(
     }
   }
 
-  // Validate: simulate each network and keep only those that reach Z0
-  const validated = results.filter((r) => {
-    const endZ = simulatePath(r, ZL_real, ZL_imag, Z0, omega);
-    if (!endZ) return false;
-    // Check if final impedance is close to Z0 (normalized ~1+j0)
-    const normR = endZ.r / Z0;
-    const normX = endZ.x / Z0;
-    return Math.abs(normR - 1) < 0.15 && Math.abs(normX) < 0.15;
-  });
+  // No filtering — keep all results, path validation happens in SmithChart
 
   // Sort results: prioritize based on impedance ratio
   const priority = (name: string): number => {
@@ -287,16 +279,16 @@ export function computeMatch(
     return 3;
   };
 
-  validated.sort((a, b) => priority(a.network) - priority(b.network));
+  results.sort((a, b) => priority(a.network) - priority(b.network));
 
-  if (validated.length > 0) {
+  if (results.length > 0) {
     const rec = ratio > 2 ? "Pi network recommended for high-impedance loads" :
                 ratio < 0.5 ? "T network recommended for low-impedance loads" :
                 "L-section recommended for moderate impedance ratio";
-    validated[0].reason = `${rec}. ${validated[0].reason}`;
+    results[0].reason = `${rec}. ${results[0].reason}`;
   }
 
-  return validated;
+  return results;
 }
 
 /** Simulate the matching path and return final impedance */
