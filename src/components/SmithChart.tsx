@@ -55,6 +55,11 @@ const SmithChart: React.FC<SmithChartProps> = ({
   const getMatchingPath = (): string => {
     if (!result || !result.components) return "";
 
+    // If ZL is already at center (matched), no path needed
+    const normR = ZLReal / z0;
+    const normX = ZLImag / z0;
+    if (Math.abs(normR - 1) < 0.01 && Math.abs(normX) < 0.01) return "";
+
     const fVal = parseFloat(freq) || 100;
     const multipliers: Record<string, number> = { Hz: 1, KHz: 1e3, MHz: 1e6, GHz: 1e9 };
     const omega = 2 * Math.PI * fVal * (multipliers[freqUnit] || 1e6);
