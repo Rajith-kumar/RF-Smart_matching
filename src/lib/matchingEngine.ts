@@ -169,15 +169,24 @@ export function computeMatch(
     }
 
     // --- Pi Network ---
+    // For complex loads, convert ZL to parallel form to account for XL
     try {
-      const Q_pi = 3; // Design Q for Pi network
-      const R_virt = Math.min(RL, Z0) / (1 + Q_pi * Q_pi);
+      const Q_pi = 3;
+      // Convert ZL = RL + jXL to parallel form
+      const Zmag2 = RL * RL + XL * XL;
+      const Rp = Zmag2 / RL; // parallel resistance
+      const Bp_load = -XL / Zmag2; // parallel susceptance from load reactance
+
+      const R_virt = Math.min(Rp, Z0) / (1 + Q_pi * Q_pi);
       if (R_virt > 0) {
-        const Q1 = Math.sqrt(RL / R_virt - 1);
+        const Q1 = Math.sqrt(Rp / R_virt - 1);
         const Q2 = Math.sqrt(Z0 / R_virt - 1);
 
         if (!isHP) {
-          const C1 = Q1 / (omega * RL);
+          // Low-pass Pi: shunt C1, series L, shunt C2
+          const B_C1_total = Q1 / Rp;
+          const C1_susceptance = B_C1_total - Bp_load;
+          const C1 = C1_susceptance / omega;
           const L = R_virt * (Q1 + Q2) / omega;
           const C2 = Q2 / (omega * Z0);
 
@@ -193,7 +202,10 @@ export function computeMatch(
             });
           }
         } else {
-          const L1 = RL / (omega * Q1);
+          // High-pass Pi: shunt L1, series C, shunt L2
+          const B_L1_total = -Q1 / Rp;
+          const L1_susceptance = B_L1_total - Bp_load;
+          const L1 = (L1_susceptance < 0) ? -1 / (omega * L1_susceptance) : 0;
           const C = 1 / (omega * R_virt * (Q1 + Q2));
           const L2 = Z0 / (omega * Q2);
 
@@ -215,6 +227,7 @@ export function computeMatch(
     }
 
     // --- T Network ---
+    // Absorb XL into the first series element
     try {
       const Q_t = 3;
       const R_virt = Math.max(RL, Z0) * (1 + Q_t * Q_t);
@@ -238,7 +251,9 @@ export function computeMatch(
           });
         }
       } else {
-        const C1 = 1 / (omega * Q1 * RL);
+        // High-pass T: series C1, shunt L, series C2
+        const X_C1_needed = Q1 * RL + XL;
+        const C1 = (X_C1_needed > 0) ? 1 / (omega * X_C1_needed) : 0;
         const L = R_virt / (omega * (Q1 + Q2));
         const C2 = 1 / (omega * Q2 * Z0);
 
