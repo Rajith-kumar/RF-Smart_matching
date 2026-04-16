@@ -279,16 +279,16 @@ export function computeMatch(
     return 3;
   };
 
-  validated.sort((a, b) => priority(a.network) - priority(b.network));
+  results.sort((a, b) => priority(a.network) - priority(b.network));
 
-  if (validated.length > 0) {
+  if (results.length > 0) {
     const rec = ratio > 2 ? "Pi network recommended for high-impedance loads" :
                 ratio < 0.5 ? "T network recommended for low-impedance loads" :
                 "L-section recommended for moderate impedance ratio";
-    validated[0].reason = `${rec}. ${validated[0].reason}`;
+    results[0].reason = `${rec}. ${results[0].reason}`;
   }
 
-  return validated;
+  return results;
 }
 
 /** Simulate the matching path and return final impedance */
