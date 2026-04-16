@@ -163,7 +163,7 @@ const SmithChart: React.FC<SmithChartProps> = ({
     });
 
     // Validate: only draw path if it reaches center (normalized ~1+j0)
-    if (Math.abs(currR - 1) > 0.15 || Math.abs(currX) > 0.15) return "";
+    if (Math.abs(currR - 1) > 0.25 || Math.abs(currX) > 0.25) return "";
 
     return allPoints.join(" ");
   };
