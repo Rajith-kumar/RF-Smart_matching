@@ -54,35 +54,16 @@ const Index = () => {
     else setBand("SHF");
   }, [freq, freqUnit]);
 
-  const handleMatch = async () => {
+  const handleMatch = () => {
     setIsCalculating(true);
-    try {
-      const response = await fetch("http://127.0.0.1:5000/match", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ZL_real: ZLReal,
-          ZL_imag: ZLImag,
-          Z0: Z0,
-          freq: getRealHz(),
-          mode: mode,
-        }),
-      });
-      const data = await response.json();
-      setResult(data);
+    const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
+    if (results.length > 0) {
+      setAllResults(results);
+      setSelectedIdx(0);
+      setResult(results[0]);
       setViewMode("schematic");
-    } catch {
-      console.log("Backend unavailable, using client-side matching engine");
-      const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
-      if (results.length > 0) {
-        setAllResults(results);
-        setSelectedIdx(0);
-        setResult(results[0]);
-        setViewMode("schematic");
-      }
-    } finally {
-      setIsCalculating(false);
     }
+    setIsCalculating(false);
   };
 
   const handleSelectNetwork = (idx: number) => {
