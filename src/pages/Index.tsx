@@ -56,12 +56,22 @@ const Index = () => {
 
   const handleMatch = () => {
     setIsCalculating(true);
+    // If ZL is already Z0 with no reactance, no matching needed
+    if (Math.abs(ZLReal - Z0) < 0.01 && Math.abs(ZLImag) < 0.01) {
+      setAllResults([]);
+      setResult(null);
+      setIsCalculating(false);
+      return;
+    }
     const results = computeMatch(ZLReal, ZLImag, Z0, getRealHz(), mode);
     if (results.length > 0) {
       setAllResults(results);
       setSelectedIdx(0);
       setResult(results[0]);
       setViewMode("schematic");
+    } else {
+      setAllResults([]);
+      setResult(null);
     }
     setIsCalculating(false);
   };
