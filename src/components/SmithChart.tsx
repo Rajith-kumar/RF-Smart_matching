@@ -375,33 +375,75 @@ const SmithChart: React.FC<SmithChartProps> = ({
         </defs>
 
         {/* Intermediate points along the path */}
-        {matchPath.intermediates.map((p, i) => (
-          <g key={`int-${i}`}>
-            <circle
-              cx={p.x}
-              cy={p.y}
-              r="5"
-              fill={p.type === "Z" ? "hsl(280, 70%, 55%)" : "hsl(35, 90%, 55%)"}
-              stroke="white"
-              strokeWidth="1.5"
-            />
-            <text
-              x={p.x + 8}
-              y={p.y - 8}
-              fontSize="10"
-              fontWeight="700"
-              fill={p.type === "Z" ? "hsl(280, 70%, 55%)" : "hsl(35, 90%, 55%)"}
-            >
-              {p.label}
-            </text>
-          </g>
-        ))}
+        {matchPath.intermediates.map((p, i) => {
+          const fmt = (v: number) => {
+            const a = Math.abs(v);
+            if (a >= 100) return v.toFixed(0);
+            if (a >= 10) return v.toFixed(1);
+            return v.toFixed(2);
+          };
+          const fmtY = (v: number) => {
+            const mS = v * 1000;
+            const a = Math.abs(mS);
+            if (a >= 100) return mS.toFixed(0);
+            if (a >= 10) return mS.toFixed(1);
+            return mS.toFixed(2);
+          };
+          const color = p.type === "Z" ? "hsl(280, 70%, 55%)" : "hsl(35, 90%, 55%)";
+          const zStr = `Z=${fmt(p.zR)}${p.zX >= 0 ? "+" : ""}${fmt(p.zX)}j Ω`;
+          const yStr = `Y=${fmtY(p.yG)}${p.yB >= 0 ? "+" : ""}${fmtY(p.yB)}j mS`;
+          const labelX = p.x + 10;
+          const labelY = p.y < center ? p.y + 12 : p.y - 32;
+          return (
+            <g key={`int-${i}`}>
+              <circle cx={p.x} cy={p.y} r="5" fill={color} stroke="white" strokeWidth="1.5" />
+              <text x={labelX} y={labelY} fontSize="10" fontWeight="700" fill={color}>
+                {p.label}
+              </text>
+              <text x={labelX} y={labelY + 11} fontSize="8" fontWeight="600" fill={color}>
+                {zStr}
+              </text>
+              <text x={labelX} y={labelY + 21} fontSize="8" fontWeight="600" fill={color}>
+                {yStr}
+              </text>
+            </g>
+          );
+        })}
 
-        {/* Load point (ZL) */}
-        <circle cx={pL.x} cy={pL.y} r="6" fill="hsl(0, 84%, 60%)" stroke="white" strokeWidth="2" />
-        <text x={pL.x + 10} y={pL.y - 10} fontSize="11" fontWeight="700" fill="hsl(0, 84%, 60%)">
-          Z_L
-        </text>
+        {/* Load point (ZL) with Z and Y values */}
+        {(() => {
+          const fmt = (v: number) => {
+            const a = Math.abs(v);
+            if (a >= 100) return v.toFixed(0);
+            if (a >= 10) return v.toFixed(1);
+            return v.toFixed(2);
+          };
+          const den = ZLReal * ZLReal + ZLImag * ZLImag;
+          const yG = den > 1e-12 ? ZLReal / den : 0;
+          const yB = den > 1e-12 ? -ZLImag / den : 0;
+          const fmtY = (v: number) => {
+            const mS = v * 1000;
+            const a = Math.abs(mS);
+            if (a >= 100) return mS.toFixed(0);
+            if (a >= 10) return mS.toFixed(1);
+            return mS.toFixed(2);
+          };
+          const labelY = pL.y < center ? pL.y + 12 : pL.y - 36;
+          return (
+            <g>
+              <circle cx={pL.x} cy={pL.y} r="6" fill="hsl(0, 84%, 60%)" stroke="white" strokeWidth="2" />
+              <text x={pL.x + 10} y={labelY} fontSize="11" fontWeight="700" fill="hsl(0, 84%, 60%)">
+                Z_L
+              </text>
+              <text x={pL.x + 10} y={labelY + 11} fontSize="8" fontWeight="600" fill="hsl(0, 84%, 60%)">
+                Z={fmt(ZLReal)}{ZLImag >= 0 ? "+" : ""}{fmt(ZLImag)}j Ω
+              </text>
+              <text x={pL.x + 10} y={labelY + 21} fontSize="8" fontWeight="600" fill="hsl(0, 84%, 60%)">
+                Y={fmtY(yG)}{yB >= 0 ? "+" : ""}{fmtY(yB)}j mS
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Matched point (Z0) */}
         <circle cx={pM.x} cy={pM.y} r="6" fill="hsl(160, 84%, 39%)" stroke="white" strokeWidth="2" />
