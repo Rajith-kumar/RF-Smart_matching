@@ -53,27 +53,27 @@ const SmithChart: React.FC<SmithChartProps> = ({
   const fine = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
   const allValues = [...major, ...minor];
 
-  const getMatchingPath = (): string => {
-    if (!result || !result.components) return "";
+  const getMatchingPath = (): { path: string; intermediates: { x: number; y: number; label: string; type: "Z" | "Y" }[] } => {
+    const empty = { path: "", intermediates: [] };
+    if (!result || !result.components) return empty;
 
     // If ZL is already at center (matched), no path needed
     const normR = ZLReal / z0;
     const normX = ZLImag / z0;
-    if (Math.abs(normR - 1) < 0.01 && Math.abs(normX) < 0.01) return "";
+    if (Math.abs(normR - 1) < 0.01 && Math.abs(normX) < 0.01) return empty;
 
     const fVal = parseFloat(freq) || 100;
     const multipliers: Record<string, number> = { Hz: 1, KHz: 1e3, MHz: 1e6, GHz: 1e9 };
     const omega = 2 * Math.PI * fVal * (multipliers[freqUnit] || 1e6);
     const STEPS = 60;
 
-    // Current normalized impedance
     let currR = ZLReal / z0;
     let currX = ZLImag / z0;
 
     const firstPt = toSVG(currR, currX);
     const allPoints: string[] = [`M ${firstPt.x} ${firstPt.y}`];
+    const intermediates: { x: number; y: number; label: string; type: "Z" | "Y" }[] = [];
 
-    // Build component sequence based on network type
     let sequence: { val: number; type: string }[] = [];
     const comps = result.components;
     const isHP = mode === "high_pass";
@@ -114,13 +114,11 @@ const SmithChart: React.FC<SmithChartProps> = ({
           ];
     }
 
-    sequence.forEach(({ val, type }) => {
+    sequence.forEach(({ val, type }, idx) => {
       if (!val) return;
+      const isLast = idx === sequence.length - 1;
 
       if (type.startsWith("series")) {
-        // Series elements: move along constant-R circle on Z chart
-        // Series L: +jωL/Z0 → X increases → counter-clockwise
-        // Series C: -1/(ωCZ0) → X decreases → clockwise
         const totalDX =
           type === "seriesL"
             ? (omega * val) / z0
@@ -128,21 +126,20 @@ const SmithChart: React.FC<SmithChartProps> = ({
 
         for (let i = 1; i <= STEPS; i++) {
           const stepX = currX + (totalDX * i) / STEPS;
-          // Plot on Z chart (constant R circle)
           const pt = toSVG(currR, stepX);
           allPoints.push(`L ${pt.x} ${pt.y}`);
         }
         currX += totalDX;
+        if (!isLast) {
+          const pt = toSVG(currR, currX);
+          intermediates.push({ x: pt.x, y: pt.y, label: `Z${idx + 1}`, type: "Z" });
+        }
       } else {
-        // Shunt elements: move along constant-G circle on Y chart
-        // Convert current Z to Y (admittance)
         const den = currR * currR + currX * currX;
         if (den < 1e-12) return;
         const G = currR / den;
         const startB = -currX / den;
 
-        // Shunt C: +ωCZ0 → B increases → clockwise on admittance chart
-        // Shunt L: -Z0/(ωL) → B decreases → counter-clockwise on admittance chart
         const totalDB =
           type === "shuntC"
             ? omega * val * z0
@@ -150,23 +147,25 @@ const SmithChart: React.FC<SmithChartProps> = ({
 
         for (let i = 1; i <= STEPS; i++) {
           const stepB = startB + (totalDB * i) / STEPS;
-          // Plot on Y chart (admittance) using constant-G circle
           const pt = toSVGAdmittance(G, stepB);
           allPoints.push(`L ${pt.x} ${pt.y}`);
         }
 
-        // Convert back to Z for next element
         const finalB = startB + totalDB;
+        if (!isLast) {
+          // Plot Y intermediate point on Y chart
+          const pt = toSVGAdmittance(G, finalB);
+          intermediates.push({ x: pt.x, y: pt.y, label: `Y${idx + 1}`, type: "Y" });
+        }
         const finalDen = G * G + finalB * finalB;
         currR = G / finalDen;
         currX = -finalB / finalDen;
       }
     });
 
-    // Validate: only draw path if it reaches center (normalized ~1+j0)
-    if (Math.abs(currR - 1) > 0.25 || Math.abs(currX) > 0.25) return "";
+    if (Math.abs(currR - 1) > 0.25 || Math.abs(currX) > 0.25) return empty;
 
-    return allPoints.join(" ");
+    return { path: allPoints.join(" "), intermediates };
   };
 
   // Constant resistance circle arc for grid
