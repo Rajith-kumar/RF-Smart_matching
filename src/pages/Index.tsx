@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Radio, Zap, Activity, Settings, ChevronRight, Layers, Database, Info, User, Mail, TrendingUp } from "lucide-react";
 import SmithChart from "@/components/SmithChart";
 import CircuitSchematic from "@/components/CircuitSchematic";
+import RfMetrics from "@/components/RfMetrics";
 import { computeMatch } from "@/lib/matchingEngine";
 
 interface ComponentData {
@@ -189,6 +190,8 @@ const Index = () => {
                 ))}
               </div>
             )}
+
+            <RfMetrics ZLReal={ZLReal} ZLImag={ZLImag} Z0={Z0} freqHz={getRealHz()} />
 
             <div className="bg-card rounded-2xl p-6 border border-border mb-5">
               <div className="flex items-center justify-between mb-4">
