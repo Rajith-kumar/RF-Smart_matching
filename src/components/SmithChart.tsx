@@ -84,7 +84,16 @@ const SmithChart: React.FC<SmithChartProps> = ({
 
     const firstPt = toSVG(currR, currX);
     const allPoints: string[] = [`M ${firstPt.x} ${firstPt.y}`];
-    const intermediates: { x: number; y: number; label: string; type: "Z" | "Y" }[] = [];
+    const intermediates: {
+      x: number;
+      y: number;
+      label: string;
+      type: "Z" | "Y";
+      zR: number;
+      zX: number;
+      yG: number;
+      yB: number;
+    }[] = [];
 
     let sequence: { val: number; type: string }[] = [];
     const comps = result.components;
