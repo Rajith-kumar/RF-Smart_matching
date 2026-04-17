@@ -186,9 +186,20 @@ const SmithChart: React.FC<SmithChartProps> = ({
 
         const finalB = startB + totalDB;
         if (!isLast) {
-          // Plot Y intermediate point on Y chart
           const pt = toSVGAdmittance(G, finalB);
-          intermediates.push({ x: pt.x, y: pt.y, label: `Y${idx + 1}`, type: "Y" });
+          const yDen = G * G + finalB * finalB;
+          const zR = yDen > 1e-12 ? G / yDen : 0;
+          const zX = yDen > 1e-12 ? -finalB / yDen : 0;
+          intermediates.push({
+            x: pt.x,
+            y: pt.y,
+            label: `Y${idx + 1}`,
+            type: "Y",
+            zR: zR * z0,
+            zX: zX * z0,
+            yG: G / z0,
+            yB: finalB / z0,
+          });
         }
         const finalDen = G * G + finalB * finalB;
         currR = G / finalDen;
