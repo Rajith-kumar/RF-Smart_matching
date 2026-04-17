@@ -50,29 +50,30 @@ const SmithChart: React.FC<SmithChartProps> = ({
   const z0 = Z0 || 50;
   const major = [0.2, 0.5, 1, 2, 5];
   const minor = [0.1, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 1.2, 1.4, 1.6, 1.8, 2.5, 3, 3.5, 4, 4.5, 7, 8, 9, 10, 15, 20, 40, 50];
+  const fine = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
   const allValues = [...major, ...minor];
 
-  const getMatchingPath = (): string => {
-    if (!result || !result.components) return "";
+  const getMatchingPath = (): { path: string; intermediates: { x: number; y: number; label: string; type: "Z" | "Y" }[] } => {
+    const empty = { path: "", intermediates: [] };
+    if (!result || !result.components) return empty;
 
     // If ZL is already at center (matched), no path needed
     const normR = ZLReal / z0;
     const normX = ZLImag / z0;
-    if (Math.abs(normR - 1) < 0.01 && Math.abs(normX) < 0.01) return "";
+    if (Math.abs(normR - 1) < 0.01 && Math.abs(normX) < 0.01) return empty;
 
     const fVal = parseFloat(freq) || 100;
     const multipliers: Record<string, number> = { Hz: 1, KHz: 1e3, MHz: 1e6, GHz: 1e9 };
     const omega = 2 * Math.PI * fVal * (multipliers[freqUnit] || 1e6);
     const STEPS = 60;
 
-    // Current normalized impedance
     let currR = ZLReal / z0;
     let currX = ZLImag / z0;
 
     const firstPt = toSVG(currR, currX);
     const allPoints: string[] = [`M ${firstPt.x} ${firstPt.y}`];
+    const intermediates: { x: number; y: number; label: string; type: "Z" | "Y" }[] = [];
 
-    // Build component sequence based on network type
     let sequence: { val: number; type: string }[] = [];
     const comps = result.components;
     const isHP = mode === "high_pass";
@@ -113,13 +114,11 @@ const SmithChart: React.FC<SmithChartProps> = ({
           ];
     }
 
-    sequence.forEach(({ val, type }) => {
+    sequence.forEach(({ val, type }, idx) => {
       if (!val) return;
+      const isLast = idx === sequence.length - 1;
 
       if (type.startsWith("series")) {
-        // Series elements: move along constant-R circle on Z chart
-        // Series L: +jωL/Z0 → X increases → counter-clockwise
-        // Series C: -1/(ωCZ0) → X decreases → clockwise
         const totalDX =
           type === "seriesL"
             ? (omega * val) / z0
@@ -127,21 +126,20 @@ const SmithChart: React.FC<SmithChartProps> = ({
 
         for (let i = 1; i <= STEPS; i++) {
           const stepX = currX + (totalDX * i) / STEPS;
-          // Plot on Z chart (constant R circle)
           const pt = toSVG(currR, stepX);
           allPoints.push(`L ${pt.x} ${pt.y}`);
         }
         currX += totalDX;
+        if (!isLast) {
+          const pt = toSVG(currR, currX);
+          intermediates.push({ x: pt.x, y: pt.y, label: `Z${idx + 1}`, type: "Z" });
+        }
       } else {
-        // Shunt elements: move along constant-G circle on Y chart
-        // Convert current Z to Y (admittance)
         const den = currR * currR + currX * currX;
         if (den < 1e-12) return;
         const G = currR / den;
         const startB = -currX / den;
 
-        // Shunt C: +ωCZ0 → B increases → clockwise on admittance chart
-        // Shunt L: -Z0/(ωL) → B decreases → counter-clockwise on admittance chart
         const totalDB =
           type === "shuntC"
             ? omega * val * z0
@@ -149,23 +147,25 @@ const SmithChart: React.FC<SmithChartProps> = ({
 
         for (let i = 1; i <= STEPS; i++) {
           const stepB = startB + (totalDB * i) / STEPS;
-          // Plot on Y chart (admittance) using constant-G circle
           const pt = toSVGAdmittance(G, stepB);
           allPoints.push(`L ${pt.x} ${pt.y}`);
         }
 
-        // Convert back to Z for next element
         const finalB = startB + totalDB;
+        if (!isLast) {
+          // Plot Y intermediate point on Y chart
+          const pt = toSVGAdmittance(G, finalB);
+          intermediates.push({ x: pt.x, y: pt.y, label: `Y${idx + 1}`, type: "Y" });
+        }
         const finalDen = G * G + finalB * finalB;
         currR = G / finalDen;
         currX = -finalB / finalDen;
       }
     });
 
-    // Validate: only draw path if it reaches center (normalized ~1+j0)
-    if (Math.abs(currR - 1) > 0.25 || Math.abs(currX) > 0.25) return "";
+    if (Math.abs(currR - 1) > 0.25 || Math.abs(currX) > 0.25) return empty;
 
-    return allPoints.join(" ");
+    return { path: allPoints.join(" "), intermediates };
   };
 
   // Constant resistance circle arc for grid
@@ -221,18 +221,37 @@ const SmithChart: React.FC<SmithChartProps> = ({
           );
         })}
 
+        {/* Fine impedance grid (lightest) */}
+        <g clipPath="url(#smithClip)" opacity="0.08">
+          {fine.map((v) => {
+            const rc = constantRCircle(v);
+            const xArc = constantXArc(v);
+            return (
+              <g key={`fine-${v}`}>
+                <circle cx={rc.cx} cy={rc.cy} r={rc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.25" />
+                {xArc && (
+                  <>
+                    <circle cx={xArc.cx} cy={xArc.cy} r={xArc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.25" />
+                    <circle cx={xArc.cx} cy={center + (center - xArc.cy)} r={xArc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.25" />
+                  </>
+                )}
+              </g>
+            );
+          })}
+        </g>
+
         {/* Minor impedance grid */}
-        <g clipPath="url(#smithClip)" opacity="0.15">
+        <g clipPath="url(#smithClip)" opacity="0.18">
           {minor.map((v) => {
             const rc = constantRCircle(v);
             const xArc = constantXArc(v);
             return (
               <g key={`minor-${v}`}>
-                <circle cx={rc.cx} cy={rc.cy} r={rc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.3" />
+                <circle cx={rc.cx} cy={rc.cy} r={rc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.35" />
                 {xArc && (
                   <>
-                    <circle cx={xArc.cx} cy={xArc.cy} r={xArc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.3" />
-                    <circle cx={xArc.cx} cy={center + (center - xArc.cy)} r={xArc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.3" />
+                    <circle cx={xArc.cx} cy={xArc.cy} r={xArc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.35" />
+                    <circle cx={xArc.cx} cy={center + (center - xArc.cy)} r={xArc.r} fill="none" stroke="hsl(215, 16%, 47%)" strokeWidth="0.35" />
                   </>
                 )}
               </g>
@@ -241,17 +260,17 @@ const SmithChart: React.FC<SmithChartProps> = ({
         </g>
 
         {/* Major impedance grid */}
-        <g clipPath="url(#smithClip)" opacity="0.4">
+        <g clipPath="url(#smithClip)" opacity="0.45">
           {major.map((v) => {
             const rc = constantRCircle(v);
             const xArc = constantXArc(v);
             return (
               <g key={`major-${v}`}>
-                <circle cx={rc.cx} cy={rc.cy} r={rc.r} fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="0.7" />
+                <circle cx={rc.cx} cy={rc.cy} r={rc.r} fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="0.8" />
                 {xArc && (
                   <>
-                    <circle cx={xArc.cx} cy={xArc.cy} r={xArc.r} fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="0.7" />
-                    <circle cx={xArc.cx} cy={center + (center - xArc.cy)} r={xArc.r} fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="0.7" />
+                    <circle cx={xArc.cx} cy={xArc.cy} r={xArc.r} fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="0.8" />
+                    <circle cx={xArc.cx} cy={center + (center - xArc.cy)} r={xArc.r} fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="0.8" />
                   </>
                 )}
               </g>
@@ -263,17 +282,17 @@ const SmithChart: React.FC<SmithChartProps> = ({
         <line x1={center - radius} y1={center} x2={center + radius} y2={center} stroke="hsl(215, 16%, 47%)" strokeWidth="0.8" />
 
         {/* Axis labels - R values */}
-        {[0.2, 0.5, 1, 2, 5, 10, 20].map((v) => {
+        {[0.1, 0.2, 0.3, 0.5, 1, 2, 3, 5, 10, 20, 50].map((v) => {
           const pt = toSVG(v, 0);
           return (
-            <text key={`rlabel-${v}`} x={pt.x} y={pt.y + 14} textAnchor="middle" fontSize="9" fill="hsl(215, 16%, 47%)" fontWeight="600">
+            <text key={`rlabel-${v}`} x={pt.x} y={pt.y + 12} textAnchor="middle" fontSize="8" fill="hsl(215, 16%, 47%)" fontWeight="600">
               {v}
             </text>
           );
         })}
 
-        {/* Axis labels - X values */}
-        {[0.2, 0.5, 1, 2, 5, -0.2, -0.5, -1, -2, -5].map((v) => {
+        {/* Axis labels - X values around the rim */}
+        {[0.1, 0.2, 0.3, 0.5, 1, 2, 3, 5, -0.1, -0.2, -0.3, -0.5, -1, -2, -3, -5].map((v) => {
           const pt = toSVG(0, v);
           const angle = Math.atan2(pt.y - center, pt.x - center);
           return (
@@ -282,19 +301,19 @@ const SmithChart: React.FC<SmithChartProps> = ({
               x={pt.x + Math.cos(angle) * 14}
               y={pt.y + Math.sin(angle) * 14}
               textAnchor="middle"
-              fontSize="8"
+              fontSize="7.5"
               fill="hsl(215, 16%, 47%)"
               fontWeight="600"
             >
-              {v > 0 ? `${v}j` : `${v}j`}
+              {v > 0 ? `+${v}j` : `${v}j`}
             </text>
           );
         })}
 
         {/* Matching path */}
-        {matchPath && (
+        {matchPath.path && (
           <path
-            d={matchPath}
+            d={matchPath.path}
             fill="none"
             stroke="hsl(0, 84%, 60%)"
             strokeWidth="2.5"
@@ -310,6 +329,29 @@ const SmithChart: React.FC<SmithChartProps> = ({
             <polygon points="0 0, 8 3, 0 6" fill="hsl(0, 84%, 60%)" />
           </marker>
         </defs>
+
+        {/* Intermediate points along the path */}
+        {matchPath.intermediates.map((p, i) => (
+          <g key={`int-${i}`}>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r="5"
+              fill={p.type === "Z" ? "hsl(280, 70%, 55%)" : "hsl(35, 90%, 55%)"}
+              stroke="white"
+              strokeWidth="1.5"
+            />
+            <text
+              x={p.x + 8}
+              y={p.y - 8}
+              fontSize="10"
+              fontWeight="700"
+              fill={p.type === "Z" ? "hsl(280, 70%, 55%)" : "hsl(35, 90%, 55%)"}
+            >
+              {p.label}
+            </text>
+          </g>
+        ))}
 
         {/* Load point (ZL) */}
         <circle cx={pL.x} cy={pL.y} r="6" fill="hsl(0, 84%, 60%)" stroke="white" strokeWidth="2" />

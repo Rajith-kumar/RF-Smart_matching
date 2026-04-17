@@ -110,11 +110,12 @@ export function computeMatch(
         }
       } else if (RL < Z0) {
         const Q = Math.sqrt(Z0 / RL - 1);
-        const X_series = Q * RL;
         const B_shunt = Q / Z0;
 
         if (!isHP) {
-          const L_series = (X_series - XL) / omega;
+          // LP RL<Z0: junction X must be +Q*RL; series L adds (Q*RL - XL)
+          const X_add = Q * RL - XL;
+          const L_series = X_add / omega;
           const C_shunt = B_shunt / omega;
 
           if (L_series > 0 && C_shunt > 0) {
@@ -128,7 +129,9 @@ export function computeMatch(
             });
           }
         } else {
-          const C_series = 1 / (omega * Math.abs(X_series - XL));
+          // HP RL<Z0: junction X must be -Q*RL; series C adds (-Q*RL - XL), must be negative
+          const X_add = -Q * RL - XL;
+          const C_series = X_add < 0 ? 1 / (omega * Math.abs(X_add)) : 0;
           const L_shunt = 1 / (omega * B_shunt);
 
           if (C_series > 0 && L_shunt > 0) {
@@ -168,22 +171,21 @@ export function computeMatch(
       // Skip if math fails
     }
 
-    // --- Pi Network ---
-    // For complex loads, convert ZL to parallel form to account for XL
+    // --- Pi Network (back-to-back L sections through low virtual R) ---
+    // Pi network steps down to a virtual R lower than min(Rp, Z0)
     try {
-      const Q_pi = 3;
-      // Convert ZL = RL + jXL to parallel form
       const Zmag2 = RL * RL + XL * XL;
-      const Rp = Zmag2 / RL; // parallel resistance
-      const Bp_load = -XL / Zmag2; // parallel susceptance from load reactance
+      const Rp = Zmag2 / RL; // parallel equivalent of load
+      const Bp_load = -XL / Zmag2; // load's parallel susceptance
 
-      const R_virt = Math.min(Rp, Z0) / (1 + Q_pi * Q_pi);
-      if (R_virt > 0) {
+      // Choose R_virt so that Q on both sides is reasonable; pick min/10 (Q≈3)
+      const R_virt = Math.min(Rp, Z0) / 10;
+      if (R_virt > 0 && Rp > R_virt && Z0 > R_virt) {
         const Q1 = Math.sqrt(Rp / R_virt - 1);
         const Q2 = Math.sqrt(Z0 / R_virt - 1);
 
         if (!isHP) {
-          // Low-pass Pi: shunt C1, series L, shunt C2
+          // Low-pass Pi: shunt C1, series L (sum of two L's), shunt C2
           const B_C1_total = Q1 / Rp;
           const C1_susceptance = B_C1_total - Bp_load;
           const C1 = C1_susceptance / omega;
@@ -198,7 +200,7 @@ export function computeMatch(
                 L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
                 C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
               },
-              reason: `Pi network: Q=${Q_pi}. Two shunt capacitors with series inductor — ideal for high-impedance loads.`,
+              reason: `Pi network (Q1=${Q1.toFixed(2)}, Q2=${Q2.toFixed(2)}): two shunt capacitors with series inductor.`,
             });
           }
         } else {
@@ -217,7 +219,7 @@ export function computeMatch(
                 C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
                 L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
               },
-              reason: `High-pass Pi network with shunt inductors and series capacitor.`,
+              reason: `High-pass Pi (Q1=${Q1.toFixed(2)}, Q2=${Q2.toFixed(2)}): shunt inductors with series capacitor.`,
             });
           }
         }
@@ -226,17 +228,20 @@ export function computeMatch(
       // Skip
     }
 
-    // --- T Network ---
-    // Absorb XL into the first series element
+    // --- T Network (back-to-back L sections through high virtual R) ---
+    // T network steps up to a virtual R higher than max(RL, Z0)
     try {
-      const Q_t = 3;
-      const R_virt = Math.max(RL, Z0) * (1 + Q_t * Q_t);
+      const R_virt = Math.max(RL, Z0) * 10; // Q ≈ 3
       const Q1 = Math.sqrt(R_virt / RL - 1);
       const Q2 = Math.sqrt(R_virt / Z0 - 1);
 
       if (!isHP) {
+        // Low-pass T: series L1 (absorbing XL), shunt C, series L2
         const L1 = (Q1 * RL - XL) / omega;
-        const C = 1 / (omega * R_virt * (Q1 + Q2));
+        // Shunt C must transform R_virt down to R_virt/(1+Q1^2) on the load side
+        // Actually after series L1, impedance is RL + j(Q1*RL). Parallel form: Rp = RL*(1+Q1^2) = R_virt, Bp = Q1/(RL*(1+Q1^2)) = Q1/R_virt
+        // Need shunt B to cancel and add: total shunt B = Q1/R_virt + Q2/R_virt
+        const C = (Q1 + Q2) / (omega * R_virt);
         const L2 = Q2 * Z0 / omega;
 
         if (L1 > 0 && C > 0 && L2 > 0) {
@@ -247,7 +252,7 @@ export function computeMatch(
               C: { theory: C, standard: toStandard(C, "F"), unit: "F" },
               L2: { theory: L2, standard: toStandard(L2, "H"), unit: "H" },
             },
-            reason: `T network: Q=${Q_t}. Two series inductors with shunt capacitor — ideal for low-impedance loads.`,
+            reason: `T network (Q1=${Q1.toFixed(2)}, Q2=${Q2.toFixed(2)}): two series inductors with shunt capacitor.`,
           });
         }
       } else {
@@ -265,7 +270,7 @@ export function computeMatch(
               L: { theory: L, standard: toStandard(L, "H"), unit: "H" },
               C2: { theory: C2, standard: toStandard(C2, "F"), unit: "F" },
             },
-            reason: `High-pass T network with series capacitors and shunt inductor.`,
+            reason: `High-pass T (Q1=${Q1.toFixed(2)}, Q2=${Q2.toFixed(2)}): series capacitors with shunt inductor.`,
           });
         }
       }
