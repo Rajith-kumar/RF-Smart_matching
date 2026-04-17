@@ -50,6 +50,7 @@ const SmithChart: React.FC<SmithChartProps> = ({
   const z0 = Z0 || 50;
   const major = [0.2, 0.5, 1, 2, 5];
   const minor = [0.1, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 1.2, 1.4, 1.6, 1.8, 2.5, 3, 3.5, 4, 4.5, 7, 8, 9, 10, 15, 20, 40, 50];
+  const fine = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
   const allValues = [...major, ...minor];
 
   const getMatchingPath = (): string => {
