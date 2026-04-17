@@ -110,11 +110,12 @@ export function computeMatch(
         }
       } else if (RL < Z0) {
         const Q = Math.sqrt(Z0 / RL - 1);
-        const X_series = Q * RL;
         const B_shunt = Q / Z0;
 
         if (!isHP) {
-          const L_series = (X_series - XL) / omega;
+          // LP RL<Z0: junction X must be +Q*RL; series L adds (Q*RL - XL)
+          const X_add = Q * RL - XL;
+          const L_series = X_add / omega;
           const C_shunt = B_shunt / omega;
 
           if (L_series > 0 && C_shunt > 0) {
@@ -128,7 +129,9 @@ export function computeMatch(
             });
           }
         } else {
-          const C_series = 1 / (omega * Math.abs(X_series - XL));
+          // HP RL<Z0: junction X must be -Q*RL; series C adds (-Q*RL - XL), must be negative
+          const X_add = -Q * RL - XL;
+          const C_series = X_add < 0 ? 1 / (omega * Math.abs(X_add)) : 0;
           const L_shunt = 1 / (omega * B_shunt);
 
           if (C_series > 0 && L_shunt > 0) {
