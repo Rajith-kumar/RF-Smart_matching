@@ -153,7 +153,19 @@ const SmithChart: React.FC<SmithChartProps> = ({
         currX += totalDX;
         if (!isLast) {
           const pt = toSVG(currR, currX);
-          intermediates.push({ x: pt.x, y: pt.y, label: `Z${idx + 1}`, type: "Z" });
+          const den2 = currR * currR + currX * currX;
+          const yG = den2 > 1e-12 ? currR / den2 : 0;
+          const yB = den2 > 1e-12 ? -currX / den2 : 0;
+          intermediates.push({
+            x: pt.x,
+            y: pt.y,
+            label: `Z${idx + 1}`,
+            type: "Z",
+            zR: currR * z0,
+            zX: currX * z0,
+            yG: yG / z0,
+            yB: yB / z0,
+          });
         }
       } else {
         const den = currR * currR + currX * currX;
