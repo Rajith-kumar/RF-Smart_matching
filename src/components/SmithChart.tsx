@@ -53,7 +53,19 @@ const SmithChart: React.FC<SmithChartProps> = ({
   const fine = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95];
   const allValues = [...major, ...minor];
 
-  const getMatchingPath = (): { path: string; intermediates: { x: number; y: number; label: string; type: "Z" | "Y" }[] } => {
+  const getMatchingPath = (): {
+    path: string;
+    intermediates: {
+      x: number;
+      y: number;
+      label: string;
+      type: "Z" | "Y";
+      zR: number;
+      zX: number;
+      yG: number;
+      yB: number;
+    }[];
+  } => {
     const empty = { path: "", intermediates: [] };
     if (!result || !result.components) return empty;
 
