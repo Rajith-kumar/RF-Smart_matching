@@ -79,7 +79,7 @@ const Index = () => {
     <div className="flex gap-8 p-8 max-w-7xl mx-auto">
       {/* Sidebar */}
       <div className="w-[380px] shrink-0">
-        <div className="bg-card rounded-2xl p-6 border border-border">
+        <div className="bg-card rounded-2xl p-6 border border-border sticky top-[86px] max-h-[calc(100vh-100px)] overflow-y-auto">
           <div className="flex items-center gap-2 font-bold text-card-foreground mb-5">
             <Settings className="w-4 h-4 text-primary" />
             Parameter Config

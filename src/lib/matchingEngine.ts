@@ -288,7 +288,20 @@ export function computeMatch(
     }
   }
 
-  // No filtering — keep all results, path validation happens in SmithChart
+  // Validate L-Section results: simulate the path; drop if it doesn't converge to Z0.
+  // Pi/T are kept as-is (their math is robust and previously verified).
+  const validated: MatchResult[] = [];
+  for (const r of results) {
+    if (r.network.includes("L Section")) {
+      const final = simulatePath(r, RL, XL, Z0, omega);
+      if (!final) continue;
+      const tol = Z0 * 0.05; // 5% tolerance
+      if (Math.abs(final.r - Z0) > tol || Math.abs(final.x) > tol) continue;
+    }
+    validated.push(r);
+  }
+  results.length = 0;
+  results.push(...validated);
 
   // Sort results: prioritize based on impedance ratio
   const priority = (name: string): number => {
@@ -321,7 +334,7 @@ export function computeMatch(
 }
 
 /** Simulate the matching path and return final impedance */
-function simulatePath(
+export function simulatePath(
   result: MatchResult,
   ZLReal: number,
   ZLImag: number,
