@@ -72,40 +72,49 @@ export function computeMatch(
   if (RL !== Z0 || XL !== 0) {
     try {
       if (RL > Z0) {
-        // Q factor
-        const Q = Math.sqrt(RL / Z0 - 1);
-        const X_series = Q * Z0 - XL; // series reactance needed
-        const B_shunt = Q / RL; // shunt susceptance needed
-
-        if (!isHP) {
-          // Low-pass: series L, shunt C
-          const L_series = Math.abs(X_series) / omega;
-          const C_shunt = B_shunt / omega;
-
-          if (L_series > 0 && C_shunt > 0) {
-            results.push({
-              network: "L Section (Type 1)",
-              components: {
-                L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
-                C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
-              },
-              reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): L-network with series inductor (${(L_series * 1e9).toFixed(1)} nH) and shunt capacitor (${(C_shunt * 1e12).toFixed(1)} pF). Q = ${Q.toFixed(2)}.`,
-            });
-          }
-        } else {
-          // High-pass: series C, shunt L
-          const C_series = 1 / (omega * Math.abs(X_series));
-          const L_shunt = 1 / (omega * B_shunt);
-
-          if (C_series > 0 && L_shunt > 0) {
-            results.push({
-              network: "L Section (Type 1)",
-              components: {
-                C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
-                L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
-              },
-              reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): High-pass L-network with series capacitor and shunt inductor. Q = ${Q.toFixed(2)}.`,
-            });
+        // For RL > Z0: shunt element across load, then series element to source.
+        // Convert load to parallel: Rp = (RL^2 + XL^2)/RL, Bp = -XL/(RL^2+XL^2)
+        // After adding shunt B_add, parallel R is still Rp, total B = Bp + B_add.
+        // Need parallel R after transform = Z0 with some series reactance to cancel.
+        // Standard: Q = sqrt(Rp/Z0 - 1)
+        const Rp = (RL * RL + XL * XL) / RL;
+        const Bp = -XL / (RL * RL + XL * XL);
+        if (Rp > Z0) {
+          const Q = Math.sqrt(Rp / Z0 - 1);
+          // Two solutions for shunt susceptance: B_total = ±Q/Rp
+          // Then series X needed to cancel = ∓Q*Z0
+          // Low-pass needs shunt C (B_add > 0) and series L (X > 0): pick B_total = +Q/Rp, X_series = +Q*Z0
+          // High-pass needs shunt L (B_add < 0) and series C (X < 0): pick B_total = -Q/Rp, X_series = -Q*Z0
+          if (!isHP) {
+            const B_add = Q / Rp - Bp;
+            const X_series = Q * Z0;
+            const C_shunt = B_add / omega;
+            const L_series = X_series / omega;
+            if (L_series > 0 && C_shunt > 0) {
+              results.push({
+                network: "L Section (Type 1)",
+                components: {
+                  L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
+                  C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
+                },
+                reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): L-network with series inductor and shunt capacitor. Q = ${Q.toFixed(2)}.`,
+              });
+            }
+          } else {
+            const B_add = -Q / Rp - Bp;
+            const X_series = -Q * Z0;
+            const L_shunt = B_add < 0 ? 1 / (omega * Math.abs(B_add)) : 0;
+            const C_series = X_series < 0 ? 1 / (omega * Math.abs(X_series)) : 0;
+            if (C_series > 0 && L_shunt > 0) {
+              results.push({
+                network: "L Section (Type 1)",
+                components: {
+                  C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
+                  L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
+                },
+                reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): High-pass L-network with series capacitor and shunt inductor. Q = ${Q.toFixed(2)}.`,
+              });
+            }
           }
         }
       } else if (RL < Z0) {
