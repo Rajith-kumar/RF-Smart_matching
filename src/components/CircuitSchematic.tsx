@@ -94,6 +94,49 @@ const CircuitSchematic: React.FC<CircuitSchematicProps> = ({ result, mode }) => 
           const shuntFirst = result.order === "shunt_first";
           const seriesX = shuntFirst ? 260 : 140;
           const shuntX = shuntFirst ? 140 : 280;
+
+          // Detect which elements actually exist in this result.
+          const hasSeriesL = !!comps.L_series;
+          const hasSeriesC = !!comps.C_series;
+          const hasShuntL  = !!comps.L_shunt;
+          const hasShuntC  = !!comps.C_shunt;
+          const hasSeries  = hasSeriesL || hasSeriesC;
+          const hasShunt   = hasShuntL  || hasShuntC;
+
+          // Reactance-cancel case: only ONE component is present.
+          // Place it centrally as a single series element and skip the shunt branch.
+          if (hasSeries && !hasShunt) {
+            const cx = 200;
+            const seriesLabel = hasSeriesC
+              ? (comps.C_series?.standard || "C")
+              : (comps.L_series?.standard || "L");
+            return (
+              <g>
+                <line x1={40} y1={100} x2={cx} y2={100} stroke="#1e293b" strokeWidth="2" />
+                {hasSeriesC
+                  ? drawCapacitor(cx, 100, seriesLabel, true)
+                  : drawInductor(cx, 100, seriesLabel, true)}
+                <line x1={cx + 48} y1={100} x2={400} y2={100} stroke="#1e293b" strokeWidth="2" />
+              </g>
+            );
+          }
+          if (!hasSeries && hasShunt) {
+            const cx = 200;
+            const shuntLabel = hasShuntC
+              ? (comps.C_shunt?.standard || "C")
+              : (comps.L_shunt?.standard || "L");
+            return (
+              <g>
+                <line x1={40} y1={100} x2={400} y2={100} stroke="#1e293b" strokeWidth="2" />
+                <line x1={cx} y1={100} x2={cx} y2={110} stroke="#1e293b" strokeWidth="2" />
+                {hasShuntC
+                  ? drawCapacitor(cx, 110, shuntLabel, false)
+                  : drawInductor(cx, 110, shuntLabel, false)}
+                <line x1={cx} y1={158} x2={cx} y2={220} stroke="#1e293b" strokeWidth="1.5" />
+              </g>
+            );
+          }
+
           return (
             <g>
               {/* Main horizontal line spans the whole circuit */}
