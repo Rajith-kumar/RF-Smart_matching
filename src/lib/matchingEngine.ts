@@ -385,6 +385,11 @@ export function simulatePath(
     } else if (comps.L_series) {
       sequence = [{ val: comps.L_series.theory, type: "seriesL" }];
     }
+    // When the L-section is "shunt_first" (RL > Z0 topology), the shunt element
+    // sits across the load and is applied FIRST when walking from load to source.
+    if (result.order === "shunt_first" && sequence.length === 2) {
+      sequence = [sequence[1], sequence[0]];
+    }
   } else if (result.network.includes("Pi")) {
     if (comps.C1 && comps.L && comps.C2) {
       sequence = [
