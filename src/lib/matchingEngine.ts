@@ -172,8 +172,38 @@ export function computeMatch(
           }
         }
       } else {
-        // RL === Z0, just cancel reactance
-        if (XL > 0) {
+        // RL === Z0
+        // A pure reactance-cancel solution always exists, but for the "matching"
+        // design mode we should keep a full two-element L-section whenever a
+        // physical LP/HP solution exists.
+        const den = RL * RL + XL * XL;
+        const B_add = den > 0 ? (2 * XL) / den : 0;
+
+        if (!isHP && XL > 0 && B_add > 0) {
+          const L_series = XL / omega;
+          const C_shunt = B_add / omega;
+          results.push({
+            network: "L Section (Equal-R)",
+            components: {
+              L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
+              C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
+            },
+            order: "shunt_first",
+            reason: `RL = Z0 with inductive load reactance: valid low-pass equal-resistance L-section (shunt C, then series L).`,
+          });
+        } else if (isHP && XL < 0 && B_add < 0) {
+          const C_series = 1 / (omega * Math.abs(XL));
+          const L_shunt = 1 / (omega * Math.abs(B_add));
+          results.push({
+            network: "L Section (Equal-R)",
+            components: {
+              C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
+              L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
+            },
+            order: "shunt_first",
+            reason: `RL = Z0 with capacitive load reactance: valid high-pass equal-resistance L-section (shunt L, then series C).`,
+          });
+        } else if (XL > 0) {
           const C_series = 1 / (omega * XL);
           results.push({
             network: "L Section (Reactance Cancel)",
