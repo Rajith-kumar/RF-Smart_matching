@@ -4,6 +4,7 @@ interface MatchResult {
   network: string;
   components: Record<string, { theory: number; standard: string; unit: string }>;
   reason: string;
+  order?: "series_first" | "shunt_first";
 }
 
 interface SmithChartProps {
@@ -109,6 +110,10 @@ const SmithChart: React.FC<SmithChartProps> = ({
             { val: comps.C_series?.theory, type: "seriesC" },
             { val: comps.L_shunt?.theory, type: "shuntL" },
           ];
+      // For "shunt_first" L-section (RL > Z0), the shunt element is applied first when walking load→source.
+      if (result.order === "shunt_first") {
+        sequence = [sequence[1], sequence[0]];
+      }
     } else if (result.network.includes("Pi Network")) {
       sequence = !isHP
         ? [

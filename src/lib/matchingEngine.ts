@@ -13,6 +13,12 @@ export interface MatchResult {
   network: string;
   components: Record<string, ComponentData>;
   reason: string;
+  /** L-section topology ordering, viewed source→load.
+   *  "series_first": series element nearest source, shunt across load (used when RL < Z0).
+   *  "shunt_first" : shunt across load nearest source side, series element between shunt and load — i.e. shunt is the FIRST stage applied when walking from load to source (used when RL > Z0).
+   *  Defaults to "series_first" when omitted (kept for backward compatibility / Pi / T).
+   */
+  order?: "series_first" | "shunt_first";
 }
 
 const E12_VALUES = [
@@ -73,85 +79,96 @@ export function computeMatch(
     try {
       if (RL > Z0) {
         // For RL > Z0: shunt element across load, then series element to source.
-        // Convert load to parallel: Rp = (RL^2 + XL^2)/RL, Bp = -XL/(RL^2+XL^2)
-        // After adding shunt B_add, parallel R is still Rp, total B = Bp + B_add.
-        // Need parallel R after transform = Z0 with some series reactance to cancel.
-        // Standard: Q = sqrt(Rp/Z0 - 1)
         const Rp = (RL * RL + XL * XL) / RL;
         const Bp = -XL / (RL * RL + XL * XL);
         if (Rp > Z0) {
           const Q = Math.sqrt(Rp / Z0 - 1);
-          // Two solutions for shunt susceptance: B_total = ±Q/Rp
-          // Then series X needed to cancel = ∓Q*Z0
-          // Low-pass needs shunt C (B_add > 0) and series L (X > 0): pick B_total = +Q/Rp, X_series = +Q*Z0
-          // High-pass needs shunt L (B_add < 0) and series C (X < 0): pick B_total = -Q/Rp, X_series = -Q*Z0
-          if (!isHP) {
-            const B_add = Q / Rp - Bp;
-            const X_series = Q * Z0;
-            const C_shunt = B_add / omega;
-            const L_series = X_series / omega;
-            if (L_series > 0 && C_shunt > 0) {
-              results.push({
-                network: "L Section (Type 1)",
-                components: {
-                  L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
-                  C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
-                },
-                reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): L-network with series inductor and shunt capacitor. Q = ${Q.toFixed(2)}.`,
-              });
-            }
-          } else {
-            const B_add = -Q / Rp - Bp;
-            const X_series = -Q * Z0;
-            const L_shunt = B_add < 0 ? 1 / (omega * Math.abs(B_add)) : 0;
-            const C_series = X_series < 0 ? 1 / (omega * Math.abs(X_series)) : 0;
-            if (C_series > 0 && L_shunt > 0) {
-              results.push({
-                network: "L Section (Type 1)",
-                components: {
-                  C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
-                  L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
-                },
-                reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): High-pass L-network with series capacitor and shunt inductor. Q = ${Q.toFixed(2)}.`,
-              });
+          // TWO classical solutions (sign of Q):
+          //   Sol A: B_total = +Q/Rp (shunt adds capacitive B), X_series = +Q*Z0 (series L)  -> LP-like
+          //   Sol B: B_total = -Q/Rp (shunt adds inductive B),  X_series = -Q*Z0 (series C)  -> HP-like
+          // For each user-selected mode we attempt BOTH; the validator drops any
+          // combination whose component values are non-physical (negative L or C).
+          const candidates: { sign: 1 | -1; label: string }[] = [
+            { sign: 1, label: "Type 1a" },
+            { sign: -1, label: "Type 1b" },
+          ];
+          for (const { sign, label } of candidates) {
+            const B_add = (sign * Q) / Rp - Bp;
+            const X_series = sign * Q * Z0;
+
+            if (!isHP) {
+              // Low-pass topology: series L + shunt C
+              const L_series = X_series / omega;
+              const C_shunt = B_add / omega;
+              if (L_series > 0 && C_shunt > 0) {
+                results.push({
+                  network: `L Section (${label})`,
+                  components: {
+                    L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
+                    C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
+                  },
+                  order: "shunt_first",
+                  reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): Low-pass L-network (series L, shunt C). Q = ${Q.toFixed(2)}.`,
+                });
+              }
+            } else {
+              // High-pass topology: series C + shunt L
+              const C_series = X_series < 0 ? 1 / (omega * Math.abs(X_series)) : 0;
+              const L_shunt = B_add < 0 ? 1 / (omega * Math.abs(B_add)) : 0;
+              if (C_series > 0 && L_shunt > 0) {
+                results.push({
+                  network: `L Section (${label})`,
+                  components: {
+                    C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
+                    L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
+                  },
+                  order: "shunt_first",
+                  reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): High-pass L-network (series C, shunt L). Q = ${Q.toFixed(2)}.`,
+                });
+              }
             }
           }
         }
       } else if (RL < Z0) {
+        // For RL < Z0: series element first, then shunt element to source.
         const Q = Math.sqrt(Z0 / RL - 1);
-        const B_shunt = Q / Z0;
+        // TWO classical solutions: junction reactance = ±Q*RL ; shunt B = ∓Q/Z0
+        const candidates: { sign: 1 | -1; label: string }[] = [
+          { sign: 1, label: "Type 2a" },
+          { sign: -1, label: "Type 2b" },
+        ];
+        for (const { sign, label } of candidates) {
+          const X_add = sign * Q * RL - XL;       // reactance the series element must add
+          const B_shunt = -sign * Q / Z0;          // susceptance the shunt element must add
 
-        if (!isHP) {
-          // LP RL<Z0: junction X must be +Q*RL; series L adds (Q*RL - XL)
-          const X_add = Q * RL - XL;
-          const L_series = X_add / omega;
-          const C_shunt = B_shunt / omega;
-
-          if (L_series > 0 && C_shunt > 0) {
-            results.push({
-              network: "L Section (Type 2)",
-              components: {
-                L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
-                C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
-              },
-              reason: `RL (${RL}Ω) < Z0 (${Z0}Ω): L-network with series inductor and shunt capacitor. Q = ${Q.toFixed(2)}.`,
-            });
-          }
-        } else {
-          // HP RL<Z0: junction X must be -Q*RL; series C adds (-Q*RL - XL), must be negative
-          const X_add = -Q * RL - XL;
-          const C_series = X_add < 0 ? 1 / (omega * Math.abs(X_add)) : 0;
-          const L_shunt = 1 / (omega * B_shunt);
-
-          if (C_series > 0 && L_shunt > 0) {
-            results.push({
-              network: "L Section (Type 2)",
-              components: {
-                C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
-                L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
-              },
-              reason: `RL (${RL}Ω) < Z0 (${Z0}Ω): High-pass L-network with series capacitor and shunt inductor. Q = ${Q.toFixed(2)}.`,
-            });
+          if (!isHP) {
+            // Low-pass: series L (X_add > 0), shunt C (B_shunt > 0)
+            const L_series = X_add > 0 ? X_add / omega : 0;
+            const C_shunt = B_shunt > 0 ? B_shunt / omega : 0;
+            if (L_series > 0 && C_shunt > 0) {
+              results.push({
+                network: `L Section (${label})`,
+                components: {
+                  L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
+                  C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
+                },
+                reason: `RL (${RL}Ω) < Z0 (${Z0}Ω): Low-pass L-network (series L, shunt C). Q = ${Q.toFixed(2)}.`,
+              });
+            }
+          } else {
+            // High-pass: series C (X_add < 0), shunt L (B_shunt < 0)
+            const C_series = X_add < 0 ? 1 / (omega * Math.abs(X_add)) : 0;
+            const L_shunt = B_shunt < 0 ? 1 / (omega * Math.abs(B_shunt)) : 0;
+            if (C_series > 0 && L_shunt > 0) {
+              results.push({
+                network: `L Section (${label})`,
+                components: {
+                  C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
+                  L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
+                },
+                reason: `RL (${RL}Ω) < Z0 (${Z0}Ω): High-pass L-network (series C, shunt L). Q = ${Q.toFixed(2)}.`,
+              });
+            }
           }
         }
       } else {
@@ -367,6 +384,11 @@ export function simulatePath(
       sequence = [{ val: comps.C_series.theory, type: "seriesC" }];
     } else if (comps.L_series) {
       sequence = [{ val: comps.L_series.theory, type: "seriesL" }];
+    }
+    // When the L-section is "shunt_first" (RL > Z0 topology), the shunt element
+    // sits across the load and is applied FIRST when walking from load to source.
+    if (result.order === "shunt_first" && sequence.length === 2) {
+      sequence = [sequence[1], sequence[0]];
     }
   } else if (result.network.includes("Pi")) {
     if (comps.C1 && comps.L && comps.C2) {
