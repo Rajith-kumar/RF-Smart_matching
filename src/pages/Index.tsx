@@ -18,11 +18,31 @@ interface MatchResult {
 }
 
 const teamMembers = [
-  { name: "Arjun Mehta", role: "Lead RF Engineer", bio: "Ph.D. in Electromagnetics. Specialized in Filter Synthesis." },
-  { name: "Sarah Chen", role: "Frontend Architect", bio: "Expert in real-time data visualization and React UI." },
-  { name: "David Miller", role: "Backend Developer", bio: "Algorithm lead for Smith Chart computational logic." },
-  { name: "Priya Das", role: "UI/UX Designer", bio: "Focused on technical workflows for hardware engineers." },
-  { name: "Kevin V.", role: "QA Engineer", bio: "Hardware validation and impedance accuracy specialist." },
+  {
+    name: "Rajith Kumar Mantrabuddi",
+    role: "Team Lead",
+    bio: "Led the project development using React.js, handled framework architecture, interface routing, Smith Chart visualization, and circuit design integration on the web platform.",
+  },
+  {
+    name: "Paavan Sankeerth",
+    role: "Circuit Design Specialist",
+    bio: "Worked on theoretical circuit design, developed core formulas, and contributed to the fundamental RF matching concepts behind the system.",
+  },
+  {
+    name: "Prayanshu Gupta",
+    role: "Circuit Analysis & Testing",
+    bio: "Focused on theoretical circuit design, formula validation, and rigorous testing of input data and computed results for accuracy.",
+  },
+  {
+    name: "Anupam Singh",
+    role: "RF Analysis & Frontend Developer",
+    bio: "Handled RF parametric analysis and contributed to frontend development for integrating analytical results into the user interface.",
+  },
+  {
+    name: "Arvind Jatavath",
+    role: "Frontend Developer",
+    bio: "Designed and developed the frontend interface, ensuring a smooth and intuitive user experience for technical workflows.",
+  },
 ];
 
 const Index = () => {

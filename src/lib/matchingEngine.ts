@@ -139,7 +139,7 @@ export function computeMatch(
         ];
         for (const { sign, label } of candidates) {
           const X_add = sign * Q * RL - XL;       // reactance the series element must add
-          const B_shunt = -sign * Q / Z0;          // susceptance the shunt element must add
+          const B_shunt = sign * Q / Z0;           // susceptance the shunt element must add (same sign as X_add for matched topology)
 
           if (!isHP) {
             // Low-pass: series L (X_add > 0), shunt C (B_shunt > 0)
