@@ -107,6 +107,7 @@ export function computeMatch(
                     L_series: { theory: L_series, standard: toStandard(L_series, "H"), unit: "H" },
                     C_shunt: { theory: C_shunt, standard: toStandard(C_shunt, "F"), unit: "F" },
                   },
+                  order: "shunt_first",
                   reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): Low-pass L-network (series L, shunt C). Q = ${Q.toFixed(2)}.`,
                 });
               }
@@ -121,6 +122,7 @@ export function computeMatch(
                     C_series: { theory: C_series, standard: toStandard(C_series, "F"), unit: "F" },
                     L_shunt: { theory: L_shunt, standard: toStandard(L_shunt, "H"), unit: "H" },
                   },
+                  order: "shunt_first",
                   reason: `RL (${RL}Ω) > Z0 (${Z0}Ω): High-pass L-network (series C, shunt L). Q = ${Q.toFixed(2)}.`,
                 });
               }
