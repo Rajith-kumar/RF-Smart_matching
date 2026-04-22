@@ -13,6 +13,12 @@ export interface MatchResult {
   network: string;
   components: Record<string, ComponentData>;
   reason: string;
+  /** L-section topology ordering, viewed source→load.
+   *  "series_first": series element nearest source, shunt across load (used when RL < Z0).
+   *  "shunt_first" : shunt across load nearest source side, series element between shunt and load — i.e. shunt is the FIRST stage applied when walking from load to source (used when RL > Z0).
+   *  Defaults to "series_first" when omitted (kept for backward compatibility / Pi / T).
+   */
+  order?: "series_first" | "shunt_first";
 }
 
 const E12_VALUES = [
