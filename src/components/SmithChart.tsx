@@ -4,6 +4,7 @@ interface MatchResult {
   network: string;
   components: Record<string, { theory: number; standard: string; unit: string }>;
   reason: string;
+  order?: "series_first" | "shunt_first";
 }
 
 interface SmithChartProps {
